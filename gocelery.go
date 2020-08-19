@@ -21,6 +21,8 @@ type CeleryClient struct {
 type CeleryBroker interface {
 	SendCeleryMessage(*CeleryMessage) error
 	GetTaskMessage() (*TaskMessage, error) // must be non-blocking
+	SendCeleryMessageV2(*CeleryMessageV2) error
+	GetTaskMessageV2() (*TaskMessageV2, error) // must be non-blocking
 }
 
 // CeleryBackend is interface for celery backend database

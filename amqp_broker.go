@@ -198,3 +198,66 @@ func (b *AMQPCeleryBroker) CreateQueue() error {
 	)
 	return err
 }
+
+func (b *AMQPCeleryBroker) SendCeleryMessageV2(message *CeleryMessageV2) error {
+	taskMessage := message.GetTaskMessageV2()
+	queueName := "celery"
+	_, err := b.QueueDeclare(
+		queueName, // name
+		true,      // durable
+		false,     // autoDelete
+		false,     // exclusive
+		false,     // noWait
+		nil,       // args
+	)
+	if err != nil {
+		return err
+	}
+	err = b.ExchangeDeclare(
+		"default",
+		"direct",
+		true,
+		true,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+
+	resBytes, err := json.Marshal(taskMessage)
+	if err != nil {
+		return err
+	}
+
+	publishMessage := amqp.Publishing{
+		DeliveryMode: amqp.Persistent,
+		Timestamp:    time.Now(),
+		ContentType:  "application/json",
+		Body:         resBytes,
+	}
+
+	return b.Publish(
+		"",
+		queueName,
+		false,
+		false,
+		publishMessage,
+	)
+}
+
+// GetTaskMessage retrieves task message from AMQP queue
+func (b *AMQPCeleryBroker) GetTaskMessageV2() (*TaskMessageV2, error) {
+	select {
+	case delivery := <-b.consumingChannel:
+		deliveryAck(delivery)
+		var taskMessage TaskMessageV2
+		if err := json.Unmarshal(delivery.Body, &taskMessage); err != nil {
+			return nil, err
+		}
+		return &taskMessage, nil
+	default:
+		return nil, fmt.Errorf("consuming channel is empty")
+	}
+}
