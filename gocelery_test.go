@@ -31,8 +31,10 @@ var (
 	redisBrokerWithConn  = NewRedisBroker(redisPool)
 	redisBackend         = NewRedisCeleryBackend("redis://")
 	redisBackendWithConn = NewRedisBackend(redisPool)
-	amqpBroker           = NewAMQPCeleryBroker("amqp://")
-	amqpBackend          = NewAMQPCeleryBackend("amqp://")
+	// amqpBroker           = NewAMQPCeleryBroker("amqp://")
+	// amqpBackend          = NewAMQPCeleryBackend("amqp://")
+	amqpBroker  = &AMQPCeleryBroker{}
+	amqpBackend = &AMQPCeleryBackend{}
 )
 
 // TestNoArg tests successful function execution

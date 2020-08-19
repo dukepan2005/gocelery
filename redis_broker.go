@@ -16,13 +16,16 @@ import (
 type RedisCeleryBroker struct {
 	*redis.Pool
 	QueueName string
+	// map[taskName]queueName
+	TaskQueue map[string]string
 }
 
 // NewRedisBroker creates new RedisCeleryBroker with given redis connection pool
-func NewRedisBroker(conn *redis.Pool) *RedisCeleryBroker {
+func NewRedisBroker(conn *redis.Pool, taskQueue map[string]string) *RedisCeleryBroker {
 	return &RedisCeleryBroker{
 		Pool:      conn,
 		QueueName: "celery",
+		TaskQueue: taskQueue,
 	}
 }
 
@@ -81,6 +84,61 @@ func (cb *RedisCeleryBroker) GetTaskMessage() (*TaskMessage, error) {
 		return nil, err
 	}
 	return celeryMessage.GetTaskMessage(), nil
+}
+
+// SendCeleryMessageV2 sends CeleryMessageV2 to redis queue
+func (cb *RedisCeleryBroker) SendCeleryMessageV2(message *CeleryMessageV2) error {
+	jsonBytes, err := json.Marshal(message)
+	if err != nil {
+		return err
+	}
+	conn := cb.Get()
+	defer conn.Close()
+
+	queueName := cb.QueueName
+	if newQueueName, ok := cb.TaskQueue[message.Headers.Task]; ok {
+		queueName = newQueueName
+	}
+
+	// if message.Queue != "" {
+	// 	queueName = message.Queue
+	// }
+	_, err = conn.Do("LPUSH", queueName, jsonBytes)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetCeleryMessageV2 retrieves celery message from redis queue
+func (cb *RedisCeleryBroker) GetCeleryMessageV2() (*CeleryMessageV2, error) {
+	conn := cb.Get()
+	defer conn.Close()
+	messageJSON, err := conn.Do("BRPOP", cb.QueueName, "1")
+	if err != nil {
+		return nil, err
+	}
+	if messageJSON == nil {
+		return nil, fmt.Errorf("null message received from redis")
+	}
+	messageList := messageJSON.([]interface{})
+	if string(messageList[0].([]byte)) != "celery" {
+		return nil, fmt.Errorf("not a celery message: %v", messageList[0])
+	}
+	var message CeleryMessageV2
+	if err := json.Unmarshal(messageList[1].([]byte), &message); err != nil {
+		return nil, err
+	}
+	return &message, nil
+}
+
+// GetTaskMessage retrieves task message from redis queue
+func (cb *RedisCeleryBroker) GetTaskMessageV2() (*TaskMessageV2, error) {
+	celeryMessage, err := cb.GetCeleryMessageV2()
+	if err != nil {
+		return nil, err
+	}
+	return celeryMessage.GetTaskMessageV2(), nil
 }
 
 // NewRedisPool creates pool of redis connections from given connection string
