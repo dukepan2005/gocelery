@@ -185,16 +185,16 @@ type TaskMessageV2 struct {
 }
 
 func (tm *TaskMessageV2) reset() {
-	tm.Args = nil
-	tm.Kwargs = nil
+	tm.Args = []interface{}{}
+	tm.Kwargs = map[string]interface{}{}
 	tm.Embed = embedStruct{}
 }
 
 var taskMessagePoolV2 = sync.Pool{
 	New: func() interface{} {
 		return &TaskMessageV2{
-			Args:   make([]interface{}, 0),
-			Kwargs: make(map[string]interface{}),
+			Args:   []interface{}{},
+			Kwargs: map[string]interface{}{},
 			Embed: embedStruct{
 				Chord:     nil,
 				Callbacks: nil,
