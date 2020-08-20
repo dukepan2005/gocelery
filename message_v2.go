@@ -133,8 +133,6 @@ func (ch *CeleryHeadersV2) reset() {
 
 var celeryHeadersPoolV2 = sync.Pool{
 	New: func() interface{} {
-		hostname, _ := os.Hostname()
-		taskID := uuid.Must(uuid.NewV4()).String()
 		return &CeleryHeadersV2{
 			Expires:   nil,
 			Shadow:    nil,
@@ -144,15 +142,19 @@ var celeryHeadersPoolV2 = sync.Pool{
 			ParentID:  nil,
 			Eta:       nil,
 			TimeLimit: [2]interface{}{60, nil},
-			RootID:    taskID,
-			ID:        taskID,
-			Origin:    fmt.Sprintf("%d@%s", os.Getpid(), hostname),
 		}
 	},
 }
 
 func getCeleryMessageHeadersV2(task string) *CeleryHeadersV2 {
 	msg := celeryHeadersPoolV2.Get().(*CeleryHeadersV2)
+
+	hostname, _ := os.Hostname()
+	msg.Origin = fmt.Sprintf("%d@%s", os.Getpid(), hostname)
+
+	taskID := uuid.Must(uuid.NewV4()).String()
+	msg.ID, msg.Task = taskID, taskID
+
 	msg.Task = task
 	return msg
 }
