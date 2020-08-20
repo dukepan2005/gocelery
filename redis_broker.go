@@ -16,13 +16,16 @@ import (
 type RedisCeleryBroker struct {
 	*redis.Pool
 	QueueName string
+	// map[taskName]queueName
+	TaskQueue map[string]string
 }
 
 // NewRedisBroker creates new RedisCeleryBroker with given redis connection pool
-func NewRedisBroker(conn *redis.Pool) *RedisCeleryBroker {
+func NewRedisBroker(conn *redis.Pool, taskQueue map[string]string) *RedisCeleryBroker {
 	return &RedisCeleryBroker{
 		Pool:      conn,
 		QueueName: "celery",
+		TaskQueue: taskQueue,
 	}
 }
 
@@ -91,7 +94,16 @@ func (cb *RedisCeleryBroker) SendCeleryMessageV2(message *CeleryMessageV2) error
 	}
 	conn := cb.Get()
 	defer conn.Close()
-	_, err = conn.Do("LPUSH", cb.QueueName, jsonBytes)
+
+	queueName := cb.QueueName
+	if newQueueName, ok := cb.TaskQueue[message.Headers.Task]; ok {
+		queueName = newQueueName
+	}
+
+	// if message.Queue != "" {
+	// 	queueName = message.Queue
+	// }
+	_, err = conn.Do("LPUSH", queueName, jsonBytes)
 	if err != nil {
 		return err
 	}

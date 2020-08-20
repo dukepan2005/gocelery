@@ -14,35 +14,27 @@ import (
 // CeleryMessageV2 is actual message to be sent to Redis
 // https://docs.celeryproject.org/en/stable/internals/protocol.html
 type CeleryMessageV2 struct {
-	Body            string                 `json:"body"`
-	Headers         map[string]interface{} `json:"headers"`
-	Properties      CeleryPropertiesV2     `json:"properties"`
-	ContentType     string                 `json:"content-type"`
-	ContentEncoding string                 `json:"content-encoding"`
+	Body            string             `json:"body"`
+	Headers         CeleryHeadersV2    `json:"headers"`
+	Properties      CeleryPropertiesV2 `json:"properties"`
+	ContentType     string             `json:"content-type"`
+	ContentEncoding string             `json:"content-encoding"`
 }
 
 func (cm *CeleryMessageV2) reset() {
-	cm.Headers = nil
+	cm.Headers = CeleryHeadersV2{}
 	cm.Body = ""
 	cm.ContentEncoding = ""
-	cm.Properties.CorrelationID = uuid.Must(uuid.NewV4()).String()
-	cm.Properties.ReplyTo = uuid.Must(uuid.NewV4()).String()
-	cm.Properties.DeliveryTag = uuid.Must(uuid.NewV4()).String()
+	cm.Properties.CorrelationID = ""
+	cm.Properties.ReplyTo = ""
+	cm.Properties.DeliveryTag = ""
 }
 
 var celeryMessagePoolV2 = sync.Pool{
 	New: func() interface{} {
 		return &CeleryMessageV2{
-			Body: "",
-			Headers: map[string]interface{}{
-				"expires":   nil,
-				"shadow":    nil,
-				"lang":      "py",
-				"retries":   0,
-				"group":     nil,
-				"parent_id": nil,
-				"eta":       nil,
-			},
+			Body:        "",
+			Headers:     CeleryHeadersV2{},
 			ContentType: "application/json",
 			Properties: CeleryPropertiesV2{
 				Priority:     0,
@@ -61,11 +53,11 @@ var celeryMessagePoolV2 = sync.Pool{
 	},
 }
 
-func getCeleryMessageV2(encodedTaskMessage string, headers map[string]interface{}) *CeleryMessageV2 {
+func getCeleryMessageV2(encodedTaskMessage string, headers CeleryHeadersV2) *CeleryMessageV2 {
 	msg := celeryMessagePoolV2.Get().(*CeleryMessageV2)
 	msg.Body = encodedTaskMessage
 	msg.Headers = headers
-	msg.Properties.CorrelationID = headers["id"].(string)
+	msg.Properties.CorrelationID = headers.ID
 
 	return msg
 }
@@ -117,38 +109,64 @@ func (cm *CeleryMessageV2) GetTaskMessageV2() *TaskMessageV2 {
 	return taskMessage
 }
 
+type CeleryHeadersV2 struct {
+	Expires   interface{}    `json:"expires"`
+	Shadow    interface{}    `json:"shadow"`
+	Lang      string         `json:"lang"`
+	Retries   int            `json:"retries"`
+	Group     interface{}    `json:"group"`
+	ParentID  interface{}    `json:"parent_id"`
+	Eta       interface{}    `json:"eta"`
+	TimeLimit [2]interface{} `json:"timelimit"`
+	RootID    string         `json:"root_id"`
+	ID        string         `json:"id"`
+	Task      string         `json:"task"`
+	Origin    string         `json:"origin"`
+}
+
+func (ch *CeleryHeadersV2) reset() {
+	ch.Origin = ""
+	ch.ID = ""
+	ch.Task = ""
+	ch.RootID = ""
+}
+
+var celeryHeadersPoolV2 = sync.Pool{
+	New: func() interface{} {
+		hostname, _ := os.Hostname()
+		taskID := uuid.Must(uuid.NewV4()).String()
+		return &CeleryHeadersV2{
+			Expires:   nil,
+			Shadow:    nil,
+			Lang:      "py",
+			Retries:   0,
+			Group:     nil,
+			ParentID:  nil,
+			Eta:       nil,
+			TimeLimit: [2]interface{}{60, nil},
+			RootID:    taskID,
+			ID:        taskID,
+			Origin:    fmt.Sprintf("%d@%s", os.Getpid(), hostname),
+		}
+	},
+}
+
+func getCeleryMessageHeadersV2(task string) *CeleryHeadersV2 {
+	msg := celeryHeadersPoolV2.Get().(*CeleryHeadersV2)
+	msg.Task = task
+	return msg
+}
+
+func releaseCeleryMessageHeadersV2(v *CeleryHeadersV2) {
+	v.reset()
+	celeryHeadersPoolV2.Put(v)
+}
+
 type embedStruct struct {
 	Callbacks interface{} `json:"callbacks"`
 	Errbacks  interface{} `json:"errbacks"`
 	Chain     interface{} `json:"chain"`
 	Chord     interface{} `json:"chord"`
-}
-
-func getCeleryMessageHeaders(task string) map[string]interface{} {
-	hostname, _ := os.Hostname()
-	headers := map[string]interface{}{
-		"expires": nil,
-		"shadow":  nil,
-		// "kwargsrepr": "{}",
-		"lang":      "py",
-		"group":     nil,
-		"parent_id": nil,
-		"eta":       nil,
-
-		"retries":   0,
-		"timelimit": [2]interface{}{60, nil},
-
-		"root_id": "",
-		// "argsrepr": "",
-		"task": task,
-
-		"origin": fmt.Sprintf("%d@%s", os.Getpid(), hostname),
-		"id":     uuid.Must(uuid.NewV4()).String(),
-	}
-	// headers["argsrepr"] = args
-	headers["root_id"] = headers["id"]
-
-	return headers
 }
 
 // TaskMessageV2 is celery-compatible message protocol v2
