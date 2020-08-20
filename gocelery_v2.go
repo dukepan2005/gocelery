@@ -3,7 +3,7 @@ package gocelery
 // Delay gets asynchronous result
 func (cc *CeleryClient) DelayV2(task string, args ...interface{}) (*AsyncResult, error) {
 	celeryTask := getTaskMessageV2(args...)
-	headers := getCeleryMessageHeadersV2(task)
+	headers := getCeleryMessageHeadersV2(task, args...)
 	return cc.delayV2(celeryTask, headers)
 }
 

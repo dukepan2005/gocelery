@@ -24,10 +24,10 @@ type CeleryMessageV2 struct {
 func (cm *CeleryMessageV2) reset() {
 	cm.Headers = CeleryHeadersV2{}
 	cm.Body = ""
-	cm.ContentEncoding = ""
+	cm.ContentEncoding = "utf-8"
 	cm.Properties.CorrelationID = ""
-	cm.Properties.ReplyTo = ""
-	cm.Properties.DeliveryTag = ""
+	cm.Properties.ReplyTo = uuid.Must(uuid.NewV4()).String()
+	cm.Properties.DeliveryTag = uuid.Must(uuid.NewV4()).String()
 }
 
 var celeryMessagePoolV2 = sync.Pool{
@@ -117,6 +117,7 @@ type CeleryHeadersV2 struct {
 	Group     interface{}    `json:"group"`
 	ParentID  interface{}    `json:"parent_id"`
 	Eta       interface{}    `json:"eta"`
+	Argsrepr  string         `json:"argsrepr"`
 	TimeLimit [2]interface{} `json:"timelimit"`
 	RootID    string         `json:"root_id"`
 	ID        string         `json:"id"`
@@ -125,6 +126,7 @@ type CeleryHeadersV2 struct {
 }
 
 func (ch *CeleryHeadersV2) reset() {
+	ch.Argsrepr = ""
 	ch.Origin = ""
 	ch.ID = ""
 	ch.Task = ""
@@ -146,16 +148,19 @@ var celeryHeadersPoolV2 = sync.Pool{
 	},
 }
 
-func getCeleryMessageHeadersV2(task string) *CeleryHeadersV2 {
+func getCeleryMessageHeadersV2(task string, args ...interface{}) *CeleryHeadersV2 {
 	msg := celeryHeadersPoolV2.Get().(*CeleryHeadersV2)
 
 	hostname, _ := os.Hostname()
 	msg.Origin = fmt.Sprintf("%d@%s", os.Getpid(), hostname)
 
 	taskID := uuid.Must(uuid.NewV4()).String()
-	msg.ID, msg.Task = taskID, taskID
+	msg.ID, msg.RootID = taskID, taskID
 
 	msg.Task = task
+
+	argsBytes, _ := json.Marshal(args)
+	msg.Argsrepr = string(argsBytes)
 	return msg
 }
 
