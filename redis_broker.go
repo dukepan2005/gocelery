@@ -132,7 +132,7 @@ func (cb *RedisCeleryBroker) GetCeleryMessageV2() (*CeleryMessageV2, error) {
 	return &message, nil
 }
 
-// GetTaskMessage retrieves task message from redis queue
+// GetTaskMessageV2 retrieves task message from redis queue
 func (cb *RedisCeleryBroker) GetTaskMessageV2() (*TaskMessageV2, error) {
 	celeryMessage, err := cb.GetCeleryMessageV2()
 	if err != nil {

@@ -67,7 +67,7 @@ func releaseCeleryMessageV2(v *CeleryMessageV2) {
 	celeryMessagePoolV2.Put(v)
 }
 
-// CeleryProperties represents properties json
+// CeleryPropertiesV2 represents properties json
 type CeleryPropertiesV2 struct {
 	Priority      int                  `json:"priority"`
 	BodyEncoding  string               `json:"body_encoding"`
@@ -78,6 +78,7 @@ type CeleryPropertiesV2 struct {
 	DeliveryTag   string               `json:"delivery_tag"`
 }
 
+// CeleryDeliveryInfoV2 support celery v2 delivery info
 type CeleryDeliveryInfoV2 struct {
 	RoutingKey string `json:"routing_key"`
 	Exchange   string `json:"exchange"`
@@ -109,6 +110,7 @@ func (cm *CeleryMessageV2) GetTaskMessageV2() *TaskMessageV2 {
 	return taskMessage
 }
 
+// CeleryHeadersV2 support celery v2 header
 type CeleryHeadersV2 struct {
 	Expires   interface{}    `json:"expires"`
 	Shadow    interface{}    `json:"shadow"`
@@ -149,19 +151,19 @@ var celeryHeadersPoolV2 = sync.Pool{
 }
 
 func getCeleryMessageHeadersV2(task string, args ...interface{}) *CeleryHeadersV2 {
-	msg := celeryHeadersPoolV2.Get().(*CeleryHeadersV2)
+	headers := celeryHeadersPoolV2.Get().(*CeleryHeadersV2)
 
 	hostname, _ := os.Hostname()
-	msg.Origin = fmt.Sprintf("%d@%s", os.Getpid(), hostname)
+	headers.Origin = fmt.Sprintf("%d@%s", os.Getpid(), hostname)
 
 	taskID := uuid.Must(uuid.NewV4()).String()
-	msg.ID, msg.RootID = taskID, taskID
+	headers.ID, headers.RootID = taskID, taskID
 
-	msg.Task = task
+	headers.Task = task
 
 	argsBytes, _ := json.Marshal(args)
-	msg.Argsrepr = string(argsBytes)
-	return msg
+	headers.Argsrepr = string(argsBytes)
+	return headers
 }
 
 func releaseCeleryMessageHeadersV2(v *CeleryHeadersV2) {
@@ -216,7 +218,7 @@ func releaseTaskMessageV2(v *TaskMessageV2) {
 	taskMessagePoolV2.Put(v)
 }
 
-// DecodeTaskMessage decodes base64 encrypted body and return TaskMessage object
+// DecodeTaskMessageV2 decodes base64 encrypted body and return TaskMessage object
 func DecodeTaskMessageV2(encodedBody string) (*TaskMessageV2, error) {
 	body, err := base64.StdEncoding.DecodeString(encodedBody)
 	if err != nil {
