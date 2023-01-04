@@ -46,7 +46,7 @@ func NewAMQPQueue(name string) *AMQPQueue {
 	}
 }
 
-//AMQPCeleryBroker is RedisBroker for AMQP
+// AMQPCeleryBroker is RedisBroker for AMQP
 type AMQPCeleryBroker struct {
 	*amqp.Channel
 	Connection       *amqp.Connection
@@ -199,6 +199,7 @@ func (b *AMQPCeleryBroker) CreateQueue() error {
 	return err
 }
 
+// SendCeleryMessageV2 send celery message for celery protocol v2
 func (b *AMQPCeleryBroker) SendCeleryMessageV2(message *CeleryMessageV2) error {
 	taskMessage := message.GetTaskMessageV2()
 	queueName := "celery"
@@ -247,7 +248,7 @@ func (b *AMQPCeleryBroker) SendCeleryMessageV2(message *CeleryMessageV2) error {
 	)
 }
 
-// GetTaskMessage retrieves task message from AMQP queue
+// GetTaskMessageV2 retrieves task message from AMQP queue
 func (b *AMQPCeleryBroker) GetTaskMessageV2() (*TaskMessageV2, error) {
 	select {
 	case delivery := <-b.consumingChannel:

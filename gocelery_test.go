@@ -28,7 +28,7 @@ var (
 		},
 	}
 	redisBroker          = NewRedisCeleryBroker("redis://")
-	redisBrokerWithConn  = NewRedisBroker(redisPool)
+	redisBrokerWithConn  = NewRedisBroker(redisPool, map[string]string{})
 	redisBackend         = NewRedisCeleryBackend("redis://")
 	redisBackendWithConn = NewRedisBackend(redisPool)
 	// amqpBroker           = NewAMQPCeleryBroker("amqp://")

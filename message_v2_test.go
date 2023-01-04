@@ -17,8 +17,7 @@ func TestGetTaskMessageV2(t *testing.T) {
 		t.Error("the length of celeryTask.Kwargs is not equal 0")
 	}
 
-	if celeryTask.Embed.callbacks != nil || celeryTask.Embed.errbacks != nil || celeryTask.Embed.
-		chain != nil || celeryTask.Embed.chord != nil {
+	if celeryTask.Embed.Callbacks != nil || celeryTask.Embed.Errbacks != nil || celeryTask.Embed.Chain != nil || celeryTask.Embed.Chord != nil {
 		t.Error("the celeryTask.KwaEmbedrgs is not empty")
 	}
 
@@ -26,21 +25,21 @@ func TestGetTaskMessageV2(t *testing.T) {
 
 func TestGetCeleryMessageHeaders(t *testing.T) {
 	taskName := "account.tasks.visit_notify"
-	headers := getCeleryMessageHeaders(taskName)
+	headers := getCeleryMessageHeadersV2(taskName)
 
-	if headers["id"] == "" {
+	if headers.ID == "" {
 		t.Error("the headers ID in celery message protocol v1 can't be empty")
 	}
-	if headers["id"] != headers["root_id"] {
-		t.Errorf("the headers id <%s> is not equal headers root_id<%s>", headers["id"], headers["root_id"])
+	if headers.ID != headers.RootID {
+		t.Errorf("the headers id <%s> is not equal headers root_id<%s>", headers.ID, headers.RootID)
 	}
 
-	if headers["lang"] != "py" {
+	if headers.Lang != "py" {
 		t.Error("the headers lang in celery message protocol v1 != 'py'")
 	}
 
-	if headers["task"] != taskName {
-		t.Errorf("the headers task<%s> should be %s", headers["task"], taskName)
+	if headers.Task != taskName {
+		t.Errorf("the headers task<%s> should be %s", headers.Task, taskName)
 	}
 }
 
@@ -50,11 +49,11 @@ func TestGetCeleryMessageV2(t *testing.T) {
 	encodedTaskMessage, _ := celeryTask.Encode()
 
 	taskName := "account.tasks.visit_notify"
-	headers := getCeleryMessageHeaders(taskName)
-	celeryMessage := getCeleryMessageV2(encodedTaskMessage, headers)
+	headers := getCeleryMessageHeadersV2(taskName)
+	celeryMessage := getCeleryMessageV2(encodedTaskMessage, *headers)
 
-	if celeryMessage.Properties.CorrelationID != headers["id"] {
-		t.Errorf("the Properties.CorrelationID<%s> != headers['id']<%s>", celeryMessage.Properties.CorrelationID, headers["id"])
+	if celeryMessage.Properties.CorrelationID != headers.ID {
+		t.Errorf("the Properties.CorrelationID<%s> != headers['id']<%s>", celeryMessage.Properties.CorrelationID, headers.ID)
 	}
 
 	if celeryMessage.Body == "" {

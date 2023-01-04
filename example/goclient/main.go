@@ -10,7 +10,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/gocelery/gocelery"
+	"github.com/dukepan2005/gocelery"
 	"github.com/gomodule/redigo/redis"
 )
 
@@ -38,7 +38,7 @@ func main() {
 
 	// initialize celery client
 	cli, _ := gocelery.NewCeleryClient(
-		gocelery.NewRedisBroker(redisPool),
+		gocelery.NewRedisBroker(redisPool, map[string]string{}),
 		&gocelery.RedisCeleryBackend{Pool: redisPool},
 		1,
 	)
