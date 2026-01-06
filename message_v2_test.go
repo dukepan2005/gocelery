@@ -1,6 +1,8 @@
 package gocelery
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -44,14 +46,17 @@ func TestGetCeleryMessageHeaders(t *testing.T) {
 }
 
 func TestGetCeleryMessageV2(t *testing.T) {
-	args := []interface{}{1965, 1970, 1, 1}
+	args := []interface{}{1965, 1970, "1", 1}
 	celeryTask := getTaskMessageV2(args...)
 	encodedTaskMessage, _ := celeryTask.Encode()
 
 	taskName := "account.tasks.visit_notify"
-	headers := getCeleryMessageHeadersV2(taskName)
+	headers := getCeleryMessageHeadersV2(taskName, args...)
 	celeryMessage := getCeleryMessageV2(encodedTaskMessage, *headers)
 
+	fmt.Printf("%+v\n\n\n", headers)
+
+	fmt.Printf("%+v\n\n\n", celeryMessage)
 	if celeryMessage.Properties.CorrelationID != headers.ID {
 		t.Errorf("the Properties.CorrelationID<%s> != headers['id']<%s>", celeryMessage.Properties.CorrelationID, headers.ID)
 	}
@@ -61,5 +66,29 @@ func TestGetCeleryMessageV2(t *testing.T) {
 	}
 	if celeryMessage.Body != encodedTaskMessage {
 		t.Error("message body id not right")
+	}
+}
+
+func TestGetTaskMessageV2WithKwargs(t *testing.T) {
+	kwargs := map[string]interface{}{"user": "demo"}
+	args := []interface{}{1, 2}
+	celeryTask := getTaskMessageV2WithKwargs(args, kwargs)
+	defer releaseTaskMessageV2(celeryTask)
+	kwargs["user"] = "mutated"
+	if celeryTask.Kwargs["user"] != "demo" {
+		t.Fatal("kwarg mutations should not leak into pooled task")
+	}
+	if len(celeryTask.Args) != len(args) {
+		t.Fatalf("expected %d args got %d", len(args), len(celeryTask.Args))
+	}
+}
+
+func TestBuildCeleryHeadersV2WithKwargs(t *testing.T) {
+	args := []interface{}{1965}
+	kwargs := map[string]interface{}{"name": "demo"}
+	headers := buildCeleryHeadersV2("account.tasks.visit_notify", args, kwargs)
+	defer releaseCeleryMessageHeadersV2(headers)
+	if !strings.Contains(headers.Argsrepr, "\"kwargs\"") {
+		t.Error("argsrepr should encode kwargs payload")
 	}
 }

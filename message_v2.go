@@ -22,34 +22,18 @@ type CeleryMessageV2 struct {
 }
 
 func (cm *CeleryMessageV2) reset() {
-	cm.Headers = CeleryHeadersV2{}
+	cm.Headers.reset()
 	cm.Body = ""
+	cm.ContentType = "application/json"
 	cm.ContentEncoding = "utf-8"
-	cm.Properties.CorrelationID = ""
-	cm.Properties.ReplyTo = uuid.Must(uuid.NewV4()).String()
-	cm.Properties.DeliveryTag = uuid.Must(uuid.NewV4()).String()
+	cm.Properties.reset()
 }
 
 var celeryMessagePoolV2 = sync.Pool{
 	New: func() interface{} {
-		return &CeleryMessageV2{
-			Body:        "",
-			Headers:     CeleryHeadersV2{},
-			ContentType: "application/json",
-			Properties: CeleryPropertiesV2{
-				Priority:     0,
-				BodyEncoding: "base64",
-				// CorrelationID: uuid.Must(uuid.NewV4()).String(),
-				ReplyTo: uuid.Must(uuid.NewV4()).String(),
-				DeliveryInfo: CeleryDeliveryInfoV2{
-					RoutingKey: "celery",
-					Exchange:   "",
-				},
-				DeliveryMode: 2,
-				DeliveryTag:  uuid.Must(uuid.NewV4()).String(),
-			},
-			ContentEncoding: "utf-8",
-		}
+		msg := &CeleryMessageV2{}
+		msg.reset()
+		return msg
 	},
 }
 
@@ -76,6 +60,19 @@ type CeleryPropertiesV2 struct {
 	DeliveryInfo  CeleryDeliveryInfoV2 `json:"delivery_info"`
 	DeliveryMode  int                  `json:"delivery_mode"`
 	DeliveryTag   string               `json:"delivery_tag"`
+}
+
+func (cp *CeleryPropertiesV2) reset() {
+	cp.Priority = 0
+	cp.BodyEncoding = "base64"
+	cp.CorrelationID = ""
+	cp.ReplyTo = uuid.Must(uuid.NewV4()).String()
+	cp.DeliveryInfo = CeleryDeliveryInfoV2{
+		RoutingKey: "celery",
+		Exchange:   "",
+	}
+	cp.DeliveryMode = 2
+	cp.DeliveryTag = uuid.Must(uuid.NewV4()).String()
 }
 
 // CeleryDeliveryInfoV2 support celery v2 delivery info
@@ -112,58 +109,80 @@ func (cm *CeleryMessageV2) GetTaskMessageV2() *TaskMessageV2 {
 
 // CeleryHeadersV2 support celery v2 header
 type CeleryHeadersV2 struct {
+	Lang     string `json:"lang"`
+	Task     string `json:"task"`
+	ID       string `json:"id"`
+	RootID   string `json:"root_id"`
+	ParentID string `json:"parent_id"`
+	Group    string `json:"group"`
+
 	Expires   interface{}    `json:"expires"`
 	Shadow    interface{}    `json:"shadow"`
-	Lang      string         `json:"lang"`
 	Retries   int            `json:"retries"`
-	Group     interface{}    `json:"group"`
-	ParentID  interface{}    `json:"parent_id"`
 	Eta       interface{}    `json:"eta"`
 	Argsrepr  string         `json:"argsrepr"`
 	TimeLimit [2]interface{} `json:"timelimit"`
-	RootID    string         `json:"root_id"`
-	ID        string         `json:"id"`
-	Task      string         `json:"task"`
-	Origin    string         `json:"origin"`
+
+	Origin string `json:"origin"`
 }
 
 func (ch *CeleryHeadersV2) reset() {
+	ch.Expires = nil
+	ch.Shadow = nil
+	ch.Lang = "py"
+	ch.Retries = 0
+	ch.Group = ""
+	ch.ParentID = ""
+	ch.Eta = nil
 	ch.Argsrepr = ""
-	ch.Origin = ""
+	ch.TimeLimit = [2]interface{}{60, nil}
+	ch.RootID = ""
 	ch.ID = ""
 	ch.Task = ""
-	ch.RootID = ""
+	ch.Origin = ""
 }
 
 var celeryHeadersPoolV2 = sync.Pool{
 	New: func() interface{} {
-		return &CeleryHeadersV2{
-			Expires:   nil,
-			Shadow:    nil,
-			Lang:      "py",
-			Retries:   0,
-			Group:     nil,
-			ParentID:  nil,
-			Eta:       nil,
-			TimeLimit: [2]interface{}{60, nil},
-		}
+		headers := &CeleryHeadersV2{}
+		headers.reset()
+		return headers
 	},
 }
 
 func getCeleryMessageHeadersV2(task string, args ...interface{}) *CeleryHeadersV2 {
-	headers := celeryHeadersPoolV2.Get().(*CeleryHeadersV2)
+	return buildCeleryHeadersV2(task, args, nil)
+}
 
+func buildCeleryHeadersV2(task string, args []interface{}, kwargs map[string]interface{}) *CeleryHeadersV2 {
+	headers := celeryHeadersPoolV2.Get().(*CeleryHeadersV2)
+	headers.reset()
 	hostname, _ := os.Hostname()
 	headers.Origin = fmt.Sprintf("%d@%s", os.Getpid(), hostname)
-
 	taskID := uuid.Must(uuid.NewV4()).String()
 	headers.ID, headers.RootID = taskID, taskID
-
 	headers.Task = task
-
-	argsBytes, _ := json.Marshal(args)
-	headers.Argsrepr = string(argsBytes)
+	headers.Argsrepr = formatArgsrepr(args, kwargs)
 	return headers
+}
+
+func formatArgsrepr(args []interface{}, kwargs map[string]interface{}) string {
+	if len(kwargs) == 0 {
+		data, err := json.Marshal(args)
+		if err != nil {
+			return "[]"
+		}
+		return string(data)
+	}
+	payload := map[string]interface{}{
+		"args":   args,
+		"kwargs": kwargs,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return "[]"
+	}
+	return string(data)
 }
 
 func releaseCeleryMessageHeadersV2(v *CeleryHeadersV2) {
@@ -187,29 +206,47 @@ type TaskMessageV2 struct {
 }
 
 func (tm *TaskMessageV2) reset() {
-	tm.Args = []interface{}{}
-	tm.Kwargs = map[string]interface{}{}
+	if tm.Args != nil {
+		tm.Args = tm.Args[:0]
+	}
+	if tm.Kwargs == nil {
+		tm.Kwargs = make(map[string]interface{})
+	} else {
+		for k := range tm.Kwargs {
+			delete(tm.Kwargs, k)
+		}
+	}
 	tm.Embed = embedStruct{}
 }
 
 var taskMessagePoolV2 = sync.Pool{
 	New: func() interface{} {
-		return &TaskMessageV2{
-			Args:   []interface{}{},
-			Kwargs: map[string]interface{}{},
-			Embed: embedStruct{
-				Chord:     nil,
-				Callbacks: nil,
-				Errbacks:  nil,
-				Chain:     nil,
-			},
-		}
+		msg := &TaskMessageV2{}
+		msg.reset()
+		return msg
 	},
 }
 
 func getTaskMessageV2(args ...interface{}) *TaskMessageV2 {
+	return getTaskMessageV2WithKwargs(args, nil)
+}
+
+func getTaskMessageV2WithKwargs(args []interface{}, kwargs map[string]interface{}) *TaskMessageV2 {
 	msg := taskMessagePoolV2.Get().(*TaskMessageV2)
-	msg.Args = args
+	msg.Args = append(msg.Args[:0], args...)
+	if kwargs == nil {
+		for k := range msg.Kwargs {
+			delete(msg.Kwargs, k)
+		}
+	} else {
+		for k := range msg.Kwargs {
+			delete(msg.Kwargs, k)
+		}
+		for k, v := range kwargs {
+			msg.Kwargs[k] = v
+		}
+	}
+	msg.Embed = embedStruct{}
 	return msg
 }
 
@@ -225,19 +262,39 @@ func DecodeTaskMessageV2(encodedBody string) (*TaskMessageV2, error) {
 		return nil, err
 	}
 	message := taskMessagePoolV2.Get().(*TaskMessageV2)
-	messageArr := [3]interface{}{message.Args, message.Kwargs, message.Embed}
-
-	err = json.Unmarshal(body, &messageArr)
-	if err != nil {
+	var payload []json.RawMessage
+	if err := json.Unmarshal(body, &payload); err != nil {
+		releaseTaskMessageV2(message)
 		return nil, err
 	}
+	if len(payload) != 3 {
+		releaseTaskMessageV2(message)
+		return nil, fmt.Errorf("unexpected task message payload length %d", len(payload))
+	}
 
-	args := messageArr[0]
-	kwargs := messageArr[1]
-	embed := messageArr[2]
-	message.Args = args.([]interface{})
-	message.Kwargs = kwargs.(map[string]interface{})
-	message.Embed = embed.(embedStruct)
+	var args []interface{}
+	if err := json.Unmarshal(payload[0], &args); err != nil {
+		releaseTaskMessageV2(message)
+		return nil, err
+	}
+	message.Args = append(message.Args[:0], args...)
+
+	var kwargs map[string]interface{}
+	if err := json.Unmarshal(payload[1], &kwargs); err != nil {
+		releaseTaskMessageV2(message)
+		return nil, err
+	}
+	for k := range message.Kwargs {
+		delete(message.Kwargs, k)
+	}
+	for k, v := range kwargs {
+		message.Kwargs[k] = v
+	}
+
+	if err := json.Unmarshal(payload[2], &message.Embed); err != nil {
+		releaseTaskMessageV2(message)
+		return nil, err
+	}
 
 	return message, nil
 }

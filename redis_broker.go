@@ -96,6 +96,9 @@ func (cb *RedisCeleryBroker) SendCeleryMessageV2(message *CeleryMessageV2) error
 	defer conn.Close()
 
 	queueName := cb.QueueName
+	if rk := message.Properties.DeliveryInfo.RoutingKey; rk != "" {
+		queueName = rk
+	}
 	if newQueueName, ok := cb.TaskQueue[message.Headers.Task]; ok {
 		queueName = newQueueName
 	}

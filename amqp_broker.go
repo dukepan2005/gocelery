@@ -201,8 +201,14 @@ func (b *AMQPCeleryBroker) CreateQueue() error {
 
 // SendCeleryMessageV2 send celery message for celery protocol v2
 func (b *AMQPCeleryBroker) SendCeleryMessageV2(message *CeleryMessageV2) error {
-	taskMessage := message.GetTaskMessageV2()
-	queueName := "celery"
+	queueName := b.Queue.Name
+	if rk := message.Properties.DeliveryInfo.RoutingKey; rk != "" {
+		queueName = rk
+	}
+	exchangeName := b.Exchange.Name
+	if ex := message.Properties.DeliveryInfo.Exchange; ex != "" {
+		exchangeName = ex
+	}
 	_, err := b.QueueDeclare(
 		queueName, // name
 		true,      // durable
@@ -215,7 +221,7 @@ func (b *AMQPCeleryBroker) SendCeleryMessageV2(message *CeleryMessageV2) error {
 		return err
 	}
 	err = b.ExchangeDeclare(
-		"default",
+		exchangeName,
 		"direct",
 		true,
 		true,
@@ -227,20 +233,25 @@ func (b *AMQPCeleryBroker) SendCeleryMessageV2(message *CeleryMessageV2) error {
 		return err
 	}
 
-	resBytes, err := json.Marshal(taskMessage)
+	resBytes, err := json.Marshal(message)
 	if err != nil {
 		return err
 	}
 
 	publishMessage := amqp.Publishing{
-		DeliveryMode: amqp.Persistent,
-		Timestamp:    time.Now(),
-		ContentType:  "application/json",
-		Body:         resBytes,
+		DeliveryMode:    uint8(message.Properties.DeliveryMode),
+		Priority:        uint8(message.Properties.Priority),
+		Timestamp:       time.Now(),
+		ContentType:     message.ContentType,
+		ContentEncoding: message.ContentEncoding,
+		Body:            resBytes,
+		CorrelationId:   message.Properties.CorrelationID,
+		ReplyTo:         message.Properties.ReplyTo,
+		MessageId:       message.Properties.DeliveryTag,
 	}
 
 	return b.Publish(
-		"",
+		exchangeName,
 		queueName,
 		false,
 		false,
