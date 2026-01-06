@@ -259,16 +259,16 @@ func (b *AMQPCeleryBroker) SendCeleryMessageV2(message *CeleryMessageV2) error {
 	)
 }
 
-// GetTaskMessageV2 retrieves task message from AMQP queue
-func (b *AMQPCeleryBroker) GetTaskMessageV2() (*TaskMessageV2, error) {
+// GetCeleryMessageV2 retrieves celery message v2 from AMQP queue
+func (b *AMQPCeleryBroker) GetCeleryMessageV2() (*CeleryMessageV2, error) {
 	select {
 	case delivery := <-b.consumingChannel:
 		deliveryAck(delivery)
-		var taskMessage TaskMessageV2
-		if err := json.Unmarshal(delivery.Body, &taskMessage); err != nil {
+		var celeryMessage CeleryMessageV2
+		if err := json.Unmarshal(delivery.Body, &celeryMessage); err != nil {
 			return nil, err
 		}
-		return &taskMessage, nil
+		return &celeryMessage, nil
 	default:
 		return nil, fmt.Errorf("consuming channel is empty")
 	}

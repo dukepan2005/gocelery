@@ -11,14 +11,14 @@ This package can also be used as pure go distributed task queue.
 
 Supported brokers/backends
 
-    * Redis (broker/backend)
-    * AMQP (broker/backend)
+  - Redis (broker/backend)
+  - AMQP (broker/backend)
 
 Celery must be configured to use json instead of default pickle encoding. This is because Go currently has no stable support for decoding pickle objects. Pass below configuration parameters to use json.
 
-    CELERY_TASK_SERIALIZER='json'
-    CELERY_ACCEPT_CONTENT=['json']  # Ignore other content
-    CELERY_RESULT_SERIALIZER='json'
-    CELERY_ENABLE_UTC=True
+	CELERY_TASK_SERIALIZER='json'
+	CELERY_ACCEPT_CONTENT=['json']  # Ignore other content
+	CELERY_RESULT_SERIALIZER='json'
+	CELERY_ENABLE_UTC=True
 */
 package gocelery

@@ -9,6 +9,7 @@ import (
 func TestGetTaskMessageV2(t *testing.T) {
 	args := []interface{}{1965, 1970, 1, 1}
 	celeryTask := getTaskMessageV2(args...)
+	defer releaseTaskMessageV2(celeryTask)
 
 	if len(celeryTask.Args) != len(args) {
 		t.Errorf("the length of celeryTask.Args<%d> is not equal the length of args<%d>",
@@ -28,16 +29,17 @@ func TestGetTaskMessageV2(t *testing.T) {
 func TestGetCeleryMessageHeaders(t *testing.T) {
 	taskName := "account.tasks.visit_notify"
 	headers := getCeleryMessageHeadersV2(taskName)
+	defer releaseCeleryMessageHeadersV2(headers)
 
 	if headers.ID == "" {
-		t.Error("the headers ID in celery message protocol v1 can't be empty")
+		t.Error("the headers ID in celery message protocol v2 can't be empty")
 	}
 	if headers.ID != headers.RootID {
 		t.Errorf("the headers id <%s> is not equal headers root_id<%s>", headers.ID, headers.RootID)
 	}
 
 	if headers.Lang != "py" {
-		t.Error("the headers lang in celery message protocol v1 != 'py'")
+		t.Error("the headers lang in celery message protocol v2 != 'py'")
 	}
 
 	if headers.Task != taskName {
@@ -48,11 +50,14 @@ func TestGetCeleryMessageHeaders(t *testing.T) {
 func TestGetCeleryMessageV2(t *testing.T) {
 	args := []interface{}{1965, 1970, "1", 1}
 	celeryTask := getTaskMessageV2(args...)
+	defer releaseTaskMessageV2(celeryTask)
 	encodedTaskMessage, _ := celeryTask.Encode()
 
 	taskName := "account.tasks.visit_notify"
 	headers := getCeleryMessageHeadersV2(taskName, args...)
+	defer releaseCeleryMessageHeadersV2(headers)
 	celeryMessage := getCeleryMessageV2(encodedTaskMessage, *headers)
+	defer releaseCeleryMessageV2(celeryMessage)
 
 	fmt.Printf("%+v\n\n\n", headers)
 

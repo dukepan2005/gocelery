@@ -156,7 +156,6 @@ func getCeleryMessageHeadersV2(task string, args ...interface{}) *CeleryHeadersV
 
 func buildCeleryHeadersV2(task string, args []interface{}, kwargs map[string]interface{}) *CeleryHeadersV2 {
 	headers := celeryHeadersPoolV2.Get().(*CeleryHeadersV2)
-	headers.reset()
 	hostname, _ := os.Hostname()
 	headers.Origin = fmt.Sprintf("%d@%s", os.Getpid(), hostname)
 	taskID := uuid.Must(uuid.NewV4()).String()
@@ -168,6 +167,9 @@ func buildCeleryHeadersV2(task string, args []interface{}, kwargs map[string]int
 
 func formatArgsrepr(args []interface{}, kwargs map[string]interface{}) string {
 	if len(kwargs) == 0 {
+		if args == nil {
+			return "[]"
+		}
 		data, err := json.Marshal(args)
 		if err != nil {
 			return "[]"

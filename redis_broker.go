@@ -125,7 +125,7 @@ func (cb *RedisCeleryBroker) GetCeleryMessageV2() (*CeleryMessageV2, error) {
 		return nil, fmt.Errorf("null message received from redis")
 	}
 	messageList := messageJSON.([]interface{})
-	if string(messageList[0].([]byte)) != "celery" {
+	if string(messageList[0].([]byte)) != cb.QueueName {
 		return nil, fmt.Errorf("not a celery message: %v", messageList[0])
 	}
 	var message CeleryMessageV2
@@ -135,14 +135,7 @@ func (cb *RedisCeleryBroker) GetCeleryMessageV2() (*CeleryMessageV2, error) {
 	return &message, nil
 }
 
-// GetTaskMessageV2 retrieves task message from redis queue
-func (cb *RedisCeleryBroker) GetTaskMessageV2() (*TaskMessageV2, error) {
-	celeryMessage, err := cb.GetCeleryMessageV2()
-	if err != nil {
-		return nil, err
-	}
-	return celeryMessage.GetTaskMessageV2(), nil
-}
+
 
 // NewRedisPool creates pool of redis connections from given connection string
 //

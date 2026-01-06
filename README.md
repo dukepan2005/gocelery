@@ -178,26 +178,204 @@ if err != nil {
 log.Printf("result: %+v of type %+v", res, reflect.TypeOf(res))
 ```
 
+## Task Execution Modes
+
+GoCelery supports two ways to register and execute tasks, each with different trade-offs:
+
+### Mode 1: CeleryTask Interface (Recommended for Complex Tasks)
+
+Implement the `CeleryTask` interface for zero-reflection execution and better type safety:
+
+```go
+type MyTask struct {
+    A int
+    B int
+}
+
+func (t *MyTask) ParseKwargs(kwargs map[string]interface{}) error {
+    // Add nil check
+    if kwargs == nil {
+        return fmt.Errorf("kwargs cannot be nil")
+    }
+
+    // Extract and validate parameters
+    aVal, aOk := kwargs["a"]
+    bVal, bOk := kwargs["b"]
+    if !aOk || !bOk {
+        return fmt.Errorf("missing required keys: a, b")
+    }
+
+    // Type assertion with error handling
+    aFloat, ok := aVal.(float64)
+    if !ok {
+        return fmt.Errorf("a must be a number")
+    }
+    bFloat, ok := bVal.(float64)
+    if !ok {
+        return fmt.Errorf("b must be a number")
+    }
+
+    t.A = int(aFloat)
+    t.B = int(bFloat)
+    return nil
+}
+
+func (t *MyTask) RunTask() (interface{}, error) {
+    return t.A + t.B, nil
+}
+
+// Register the task
+worker.Register("mytask", &MyTask{})
+```
+
+**Client submission (must use kwargs):**
+
+```go
+// Go Client
+asyncResult, err := client.DelayKwargsV2("mytask", map[string]interface{}{
+    "a": 10,
+    "b": 20,
+})
+
+// Python Client
+result = app.send_task(
+    'mytask',
+    kwargs={'a': 10, 'b': 20},
+    serializer='json'
+)
+```
+
+**Advantages:**
+
+* ✅ Zero reflection overhead - direct method calls
+* ✅ Compile-time type checking for task structure
+* ✅ Support for complex parameter parsing and validation
+* ✅ Better error handling capabilities
+* ✅ Suitable for tasks with many parameters or complex logic
+
+**Requirements:**
+
+* Tasks **must** be submitted with `kwargs` (not positional args)
+* Python clients must use `kwargs={'a': 10, 'b': 20}` format
+* Go clients must use `DelayKwargsV2()` method
+
+---
+
+### Mode 2: Function Pointer (Simple & Convenient)
+
+Register regular Go functions for straightforward tasks:
+
+```go
+add := func(a, b int) int {
+    return a + b
+}
+
+worker.Register("worker.add", add)
+```
+
+**Client submission (positional args):**
+
+```go
+// Go Client
+asyncResult, err := client.DelayV2("worker.add", 10, 20)
+
+// Python Client
+result = add.apply_async((10, 20), serializer='json')
+```
+
+**Advantages:**
+
+* ✅ Simple and concise - no boilerplate code
+* ✅ Natural Go function syntax
+* ✅ Works with positional arguments
+* ✅ Perfect for simple mathematical operations
+
+**Limitations:**
+
+* ❌ Runtime reflection overhead
+* ❌ Parameters must match exactly (count and basic types)
+* ❌ No support for kwargs - only positional args
+* ❌ Limited type conversion (only `float64` to `int`/`float32`)
+* ❌ Cannot handle complex parameter validation
+
+---
+
+### Comparison Table
+
+| Aspect | CeleryTask Interface | Function Pointer |
+| ------ | -------------------- | ---------------- |
+| **Performance** | Fast (zero reflection) | Slower (reflection) |
+| **Type Safety** | Compile-time | Runtime |
+| **Parameter Style** | kwargs only | args only |
+| **Validation** | Custom logic supported | Basic type coercion |
+| **Code Complexity** | More boilerplate | Minimal code |
+| **Best For** | Complex tasks, production services | Quick prototypes, simple math |
+| **Client Method** | `DelayKwargsV2()` | `DelayV2()` / `Delay()` |
+
+---
+
+### Best Practices
+
+1. **Use CeleryTask interface for production code** - Better performance and error handling
+2. **Use function pointers for prototypes** - Quick testing and simple operations
+3. **Never mix modes** - Don't try to use kwargs with function pointer tasks
+4. **Always validate in ParseKwargs** - Check for nil and required keys
+5. **Match client and worker styles** - Ensure client uses correct submission method
+
+For protocol version differences, see [`.github/copilot-instructions.md`](.github/copilot-instructions.md).
+
 ## Sample Celery Task Message
 
-Celery Message Protocol Version 1
+Celery Message Protocol Version 2
 
 ```javascript
 {
-    "expires": null,
-    "utc": true,
-    "args": [5456, 2878],
-    "chord": null,
-    "callbacks": null,
-    "errbacks": null,
-    "taskset": null,
-    "id": "c8535050-68f1-4e18-9f32-f52f1aab6d9b",
-    "retries": 0,
-    "task": "worker.add",
-    "timelimit": [null, null],
-    "eta": null,
-    "kwargs": {}
+    "body": "W1s1NDU2LCAyODc4XSwge30sIHsiY2FsbGJhY2tzIjogbnVsbCwgImVycmJhY2tzIjogbnVsbCwgImNoYWluIjogbnVsbCwgImNob3JkIjogbnVsbH1d",
+    "headers": {
+        "lang": "py",
+        "task": "worker.add",
+        "id": "c8535050-68f1-4e18-9f32-f52f1aab6d9b",
+        "root_id": "c8535050-68f1-4e18-9f32-f52f1aab6d9b",
+        "parent_id": null,
+        "group": null,
+        "expires": null,
+        "shadow": null,
+        "retries": 0,
+        "eta": null,
+        "argsrepr": "[5456, 2878]",
+        "timelimit": [60, null],
+        "origin": "12345@hostname.local"
+    },
+    "properties": {
+        "priority": 0,
+        "body_encoding": "base64",
+        "correlation_id": "c8535050-68f1-4e18-9f32-f52f1aab6d9b",
+        "reply_to": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "delivery_info": {
+            "routing_key": "celery",
+            "exchange": ""
+        },
+        "delivery_mode": 2,
+        "delivery_tag": "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+    },
+    "content-type": "application/json",
+    "content-encoding": "utf-8"
 }
+```
+
+**Body decoded (base64):**
+
+```javascript
+[
+    [5456, 2878],           // args
+    {},                      // kwargs
+    {                        // embed
+        "callbacks": null,
+        "errbacks": null,
+        "chain": null,
+        "chord": null
+    }
+]
 ```
 
 ## Projects
