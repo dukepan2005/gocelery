@@ -50,7 +50,29 @@ func (w *CeleryWorker) StartWorkerWithContext(ctx context.Context) {
 				case <-wctx.Done():
 					return
 				case <-ticker.C:
-					// process task request
+					// try to process v2 message first
+					celeryMessageV2, err := w.broker.GetCeleryMessageV2()
+					if err == nil && celeryMessageV2 != nil {
+						taskMessageV2 := celeryMessageV2.GetTaskMessageV2()
+						if taskMessageV2 != nil {
+							defer releaseTaskMessageV2(taskMessageV2)
+							// run v2 task
+							resultMsg, err := w.RunTaskV2(celeryMessageV2.Headers.Task, celeryMessageV2.Headers.ID, taskMessageV2)
+							if err != nil {
+								log.Printf("failed to run v2 task %s: %+v", celeryMessageV2.Headers.Task, err)
+								continue
+							}
+							defer releaseResultMessage(resultMsg)
+							// push result to backend
+							err = w.backend.SetResult(celeryMessageV2.Headers.ID, resultMsg)
+							if err != nil {
+								log.Printf("failed to push result: %+v", err)
+							}
+							continue
+						}
+					}
+
+					// fallback to v1 message
 					taskMessage, err := w.broker.GetTaskMessage()
 					if err != nil || taskMessage == nil {
 						continue
@@ -114,6 +136,71 @@ func (w *CeleryWorker) GetTask(name string) interface{} {
 	}
 	w.taskLock.RUnlock()
 	return task
+}
+
+// RunTaskV2 runs celery task from v2 message
+func (w *CeleryWorker) RunTaskV2(taskName string, taskID string, message *TaskMessageV2) (*ResultMessage, error) {
+	// check for malformed task message - args cannot be nil
+	if message.Args == nil {
+		return nil, fmt.Errorf("task %s is malformed - args cannot be nil", taskID)
+	}
+
+	// get task
+	task := w.GetTask(taskName)
+	if task == nil {
+		return nil, fmt.Errorf("task %s is not registered", taskName)
+	}
+
+	// convert to task interface
+	taskInterface, ok := task.(CeleryTask)
+	if ok {
+		if err := taskInterface.ParseKwargs(message.Kwargs); err != nil {
+			return nil, err
+		}
+		val, err := taskInterface.RunTask()
+		if err != nil {
+			return nil, err
+		}
+		return getResultMessage(val), err
+	}
+
+	// use reflection to execute function ptr
+	taskFunc := reflect.ValueOf(task)
+	return runTaskFuncV2(&taskFunc, message)
+}
+
+func runTaskFuncV2(taskFunc *reflect.Value, message *TaskMessageV2) (*ResultMessage, error) {
+	// check number of arguments
+	numArgs := taskFunc.Type().NumIn()
+	messageNumArgs := len(message.Args)
+	if numArgs != messageNumArgs {
+		return nil, fmt.Errorf("Number of task arguments %d does not match number of message arguments %d", numArgs, messageNumArgs)
+	}
+
+	// construct arguments
+	in := make([]reflect.Value, messageNumArgs)
+	for i, arg := range message.Args {
+		origType := taskFunc.Type().In(i).Kind()
+		msgType := reflect.TypeOf(arg).Kind()
+		// special case - convert float64 to int if applicable
+		// this is due to json limitation where all numbers are converted to float64
+		if origType == reflect.Int && msgType == reflect.Float64 {
+			arg = int(arg.(float64))
+		}
+		if origType == reflect.Float32 && msgType == reflect.Float64 {
+			arg = float32(arg.(float64))
+		}
+
+		in[i] = reflect.ValueOf(arg)
+	}
+
+	// call method
+	res := taskFunc.Call(in)
+	if len(res) == 0 {
+		return nil, nil
+	}
+
+	return getReflectionResultMessage(&res[0]), nil
 }
 
 // RunTask runs celery task
