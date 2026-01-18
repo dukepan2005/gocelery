@@ -8,7 +8,7 @@ import (
 	"os"
 	"sync"
 
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 )
 
 // CeleryMessageV2 is actual message to be sent to Redis
@@ -66,13 +66,13 @@ func (cp *CeleryPropertiesV2) reset() {
 	cp.Priority = 0
 	cp.BodyEncoding = "base64"
 	cp.CorrelationID = ""
-	cp.ReplyTo = uuid.Must(uuid.NewV4()).String()
+	cp.ReplyTo = uuid.New().String()
 	cp.DeliveryInfo = CeleryDeliveryInfoV2{
 		RoutingKey: "celery",
 		Exchange:   "",
 	}
 	cp.DeliveryMode = 2
-	cp.DeliveryTag = uuid.Must(uuid.NewV4()).String()
+	cp.DeliveryTag = uuid.New().String()
 }
 
 // CeleryDeliveryInfoV2 support celery v2 delivery info
@@ -158,7 +158,7 @@ func buildCeleryHeadersV2(task string, args []interface{}, kwargs map[string]int
 	headers := celeryHeadersPoolV2.Get().(*CeleryHeadersV2)
 	hostname, _ := os.Hostname()
 	headers.Origin = fmt.Sprintf("%d@%s", os.Getpid(), hostname)
-	taskID := uuid.Must(uuid.NewV4()).String()
+	taskID := uuid.New().String()
 	headers.ID, headers.RootID = taskID, taskID
 	headers.Task = task
 	headers.Argsrepr = formatArgsrepr(args, kwargs)
