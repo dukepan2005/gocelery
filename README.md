@@ -36,7 +36,7 @@ This is because Go currently has no stable support for decoding pickle objects.
 Pass below configuration parameters to use **json**.
 
 Starting from version 4.0, Celery uses message protocol version 2 as default value.
-GoCelery now support message protocol version 2, so you must explicitly set `CELERY_TASK_PROTOCOL` to 1.
+GoCelery now support message protocol version 2, so don't set `CELERY_TASK_PROTOCOL` to 1.
 
 ```python
 CELERY_TASK_SERIALIZER='json',

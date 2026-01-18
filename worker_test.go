@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 )
 
 // add is test task method
@@ -42,7 +42,7 @@ func TestWorkerRegisterTask(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		celeryWorker := NewCeleryWorker(tc.broker, tc.backend, 1)
-		taskName := uuid.Must(uuid.NewV4()).String()
+		taskName := uuid.New().String()
 		celeryWorker.Register(taskName, tc.registeredTask)
 		receivedTask := celeryWorker.GetTask(taskName)
 		if !reflect.DeepEqual(
@@ -77,7 +77,7 @@ func TestWorkerRunTask(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		celeryWorker := NewCeleryWorker(tc.broker, tc.backend, 1)
-		taskName := uuid.Must(uuid.NewV4()).String()
+		taskName := uuid.New().String()
 		celeryWorker.Register(taskName, tc.registeredTask)
 		args := []interface{}{
 			rand.Int(),
@@ -85,7 +85,7 @@ func TestWorkerRunTask(t *testing.T) {
 		}
 		res := add(args[0].(int), args[1].(int))
 		taskMessage := &TaskMessage{
-			ID:      uuid.Must(uuid.NewV4()).String(),
+			ID:      uuid.New().String(),
 			Task:    taskName,
 			Args:    args,
 			Kwargs:  nil,
@@ -131,14 +131,14 @@ func TestWorkerExpiredTask(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		celeryWorker := NewCeleryWorker(tc.broker, tc.backend, 1)
-		taskName := uuid.Must(uuid.NewV4()).String()
+		taskName := uuid.New().String()
 		celeryWorker.Register(taskName, tc.registeredTask)
 		args := []interface{}{
 			rand.Int(),
 			rand.Int(),
 		}
 		taskMessage := &TaskMessage{
-			ID:      uuid.Must(uuid.NewV4()).String(),
+			ID:      uuid.New().String(),
 			Task:    taskName,
 			Args:    args,
 			Kwargs:  nil,
